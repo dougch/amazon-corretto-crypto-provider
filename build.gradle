@@ -494,6 +494,8 @@ task src_jar {
 // unversioned names that fakePublish and tests/ci scripts expect.
 task release_jars(type: Copy) {
     dependsOn build, src_jar, accp_javadoc
+    // accp_javadoc does not depend on the generated hash SPI sources that build_objects creates.
+    accp_javadoc.mustRunAfter build
     def projectName = isFips ? project.name + "-FIPS" : project.name
     def prefix = "${projectName}-${version}"
     from("${buildDir}/lib") {
