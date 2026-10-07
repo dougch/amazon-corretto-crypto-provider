@@ -1,6 +1,6 @@
 name: ACCP release build
 
-# Builds the unsigned non-FIPS linux jar. Signing and publishing are added in later steps.
+# Builds the unsigned linux jars (non-FIPS and FIPS). Signing and publishing are added in later steps.
 # Only manually triggered: release jobs will run on runners that hold signing secrets,
 # so this workflow must never run on pull_request or pull_request_target.
 on:
@@ -11,10 +11,20 @@ permissions:
 
 jobs:
   build-linux:
-    name: Build linux-x86_64 (non-FIPS)
-    # Swap to the CodeBuild runner label once the fleet exists:
-    # codebuild-accp-gha-x86_64-${{ github.run_id }}-${{ github.run_attempt }}
-    runs-on: ubuntu-24.04
+    name: Build ${{ matrix.platform }} (${{ matrix.fips && 'FIPS' || 'non-FIPS' }})
+    # Swap to the CodeBuild runner labels once the fleet exists:
+    # codebuild-accp-gha-<arch>-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux-x86_64, linux-aarch_64]
+        fips: [false, true]
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+          - platform: linux-aarch_64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,15 +39,15 @@ jobs:
           distribution: 'corretto'
 
       - name: Build
-        run: ./gradlew -DFIPS=false build src_jar javadoc
+        run: ./gradlew -DFIPS=${{ matrix.fips }} release_jars
 
       - name: Record jar hashes
         run: |
-          cd build/lib
+          cd build/release
           sha256sum *.jar | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: accp-linux-x86_64
-          path: build/lib/*.jar
+          name: accp-${{ matrix.platform }}${{ matrix.fips && '-fips' || '' }}
+          path: build/release/*.jar
           if-no-files-found: error
